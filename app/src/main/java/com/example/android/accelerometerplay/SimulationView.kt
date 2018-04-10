@@ -8,14 +8,21 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.util.AttributeSet
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 
-class SimulationView(context: Context) : FrameLayout(context), SensorEventListener {
+class SimulationView @JvmOverloads constructor(
+        context: Context,
+        attrs: AttributeSet? = null,
+        defStyle: Int = 0,
+        defStyleRes: Int = 0
+) : FrameLayout(context, attrs, defStyle, defStyleRes), SensorEventListener {
 
     companion object {
         val NUM_PARTICLES = 5
@@ -52,19 +59,22 @@ class SimulationView(context: Context) : FrameLayout(context), SensorEventListen
     fun stopSimulation() = sensorManager.unregisterListener(this)
 
     init {
-
         val metrics = DisplayMetrics()
         mDisplay.getMetrics(metrics)
 
+        Log.d("metrics w/h", metrics.xdpi.toString() + "/" + metrics.ydpi)
         mMetersToPixelsX = metrics.xdpi / 0.0254f
         mMetersToPixelsY = metrics.ydpi / 0.0254f
+        Log.d("mMetersToPixels w/h", mMetersToPixelsX.toString() + "/" + mMetersToPixelsY)
 
         // rescale the mBalls so it's about 0.5 cm on screen
         val mDstWidth = (ballDiameter * mMetersToPixelsX + 0.5f).toInt()
         val mDstHeight = (ballDiameter * mMetersToPixelsY + 0.5f).toInt()
+        Log.d("ball w/h", mDstWidth.toString() + "/" + mDstHeight)
 
         val w = metrics.widthPixels
         val h = metrics.heightPixels
+        Log.d("abs w/h", w.toString() + "/" + h)
 
         mXOrigin = (w - mDstWidth) * 0.5f
         mYOrigin = (h - mDstHeight) * 0.5f
@@ -74,7 +84,10 @@ class SimulationView(context: Context) : FrameLayout(context), SensorEventListen
 
         for (i in mBalls.indices) {
             mBalls[i] = Particle(context)
-            mBalls[i].setBackgroundResource(R.drawable.ball)
+            if (i == 0)
+                mBalls[i].setBackgroundResource(R.drawable.ball_red)
+            else
+                mBalls[i].setBackgroundResource(R.drawable.ball)
             mBalls[i].setLayerType(View.LAYER_TYPE_HARDWARE, null)
             addView(mBalls[i], ViewGroup.LayoutParams(mDstWidth, mDstHeight))
         }
@@ -82,6 +95,8 @@ class SimulationView(context: Context) : FrameLayout(context), SensorEventListen
 
         val opts = BitmapFactory.Options()
         opts.inPreferredConfig = Bitmap.Config.RGB_565
+
+        setWillNotDraw(false) // magic !
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -123,25 +138,28 @@ class SimulationView(context: Context) : FrameLayout(context), SensorEventListen
          */
         val particleSystem = mParticleSystem
         val now = System.currentTimeMillis()
-        val sx = mSensorX
-        val sy = mSensorY
+        val xSensor = mSensorX
+        val ySensor = mSensorY
 
-        particleSystem.update(sx, sy, now)
+        particleSystem.update(xSensor, ySensor, now)
 
         val xc = mXOrigin
         val yc = mYOrigin
-        val xs = mMetersToPixelsX
-        val ys = mMetersToPixelsY
+        val xMeters = mMetersToPixelsX
+        val yMeters = mMetersToPixelsY
         for (i in mBalls.indices) {
             /*
              * We transform the canvas so that the coordinate system matches
              * the sensors coordinate system with the origin in the center
              * of the screen and the unit is the meter.
              */
-            val x = xc + particleSystem.getPosX(i) * xs
-            val y = yc - particleSystem.getPosY(i) * ys
+            val x = xc + particleSystem.getPosX(i) * xMeters
+            val y = yc - particleSystem.getPosY(i) * yMeters
             mBalls[i].translationX = x
             mBalls[i].translationY = y
+
+            if (i == 0)
+                Log.d("translationY", y.toString())
         }
 
         // and make sure to redraw asap

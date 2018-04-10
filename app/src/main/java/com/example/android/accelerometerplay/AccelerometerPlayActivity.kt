@@ -19,9 +19,8 @@ class AccelerometerPlayActivity : Activity() {
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        mSimulationView = SimulationView(this)
-        mSimulationView.setBackgroundResource(R.drawable.street)
-        setContentView(mSimulationView)
+        setContentView(R.layout.main)
+        mSimulationView = findViewById(R.id.simView) as SimulationView
     }
 
     override fun onResume() {
