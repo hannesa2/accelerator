@@ -16,6 +16,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import kotlin.properties.Delegates
 
 class SimulationView @JvmOverloads constructor(
         context: Context,
@@ -36,15 +37,15 @@ class SimulationView @JvmOverloads constructor(
 
     private val mAccelerometer: Sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    private val mMetersToPixelsX: Float
-    private val mMetersToPixelsY: Float
+    private var mMetersToPixelsX: Float by Delegates.notNull()
+    private var mMetersToPixelsY: Float by Delegates.notNull()
 
     private var mXOrigin: Float = 0f
     private var mYOrigin: Float = 0f
     private var mSensorX: Float = 0f
     private var mSensorY: Float = 0f
 
-    private val mParticleSystem: ParticleSystem
+    private lateinit var mParticleSystem: ParticleSystem
 
     private val mBalls = Array(NUM_PARTICLES, { Particle(context) })
 
@@ -62,19 +63,15 @@ class SimulationView @JvmOverloads constructor(
         val metrics = DisplayMetrics()
         mDisplay.getMetrics(metrics)
 
-        Log.d("metrics w/h", metrics.xdpi.toString() + "/" + metrics.ydpi)
         mMetersToPixelsX = metrics.xdpi / 0.0254f
         mMetersToPixelsY = metrics.ydpi / 0.0254f
-        Log.d("mMetersToPixels w/h", mMetersToPixelsX.toString() + "/" + mMetersToPixelsY)
 
         // rescale the mBalls so it's about 0.5 cm on screen
         val mDstWidth = (ballDiameter * mMetersToPixelsX + 0.5f).toInt()
         val mDstHeight = (ballDiameter * mMetersToPixelsY + 0.5f).toInt()
-        Log.d("ball w/h", mDstWidth.toString() + "/" + mDstHeight)
 
         val w = metrics.widthPixels
         val h = metrics.heightPixels
-        Log.d("abs w/h", w.toString() + "/" + h)
 
         mXOrigin = (w - mDstWidth) * 0.5f
         mYOrigin = (h - mDstHeight) * 0.5f
@@ -97,6 +94,30 @@ class SimulationView @JvmOverloads constructor(
         opts.inPreferredConfig = Bitmap.Config.RGB_565
 
         setWillNotDraw(false) // magic !
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+
+        val metrics = DisplayMetrics()
+        mDisplay.getMetrics(metrics)
+
+        mMetersToPixelsX = metrics.xdpi / 0.0254f
+        mMetersToPixelsY = metrics.ydpi / 0.0254f
+
+        // rescale the mBalls so it's about 0.5 cm on screen
+        val mDstWidth = (ballDiameter * mMetersToPixelsX + 0.5f).toInt()
+        val mDstHeight = (ballDiameter * mMetersToPixelsY + 0.5f).toInt()
+        Log.d("ball w/h", mDstWidth.toString() + "/" + mDstHeight)
+
+        val w = width // metrics.widthPixels
+        val h = height //metrics.heightPixels
+
+        mXOrigin = (w - mDstWidth) * 0.5f
+        mYOrigin = (h - mDstHeight) * 0.5f
+
+        xBound = (w / mMetersToPixelsX - ballDiameter) * 0.5f
+        yBound = (h / mMetersToPixelsY - ballDiameter) * 0.5f
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -157,9 +178,6 @@ class SimulationView @JvmOverloads constructor(
             val y = yc - particleSystem.getPosY(i) * yMeters
             mBalls[i].translationX = x
             mBalls[i].translationY = y
-
-            if (i == 0)
-                Log.d("translationY", y.toString())
         }
 
         // and make sure to redraw asap
