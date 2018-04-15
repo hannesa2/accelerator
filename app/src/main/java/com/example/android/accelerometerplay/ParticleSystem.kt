@@ -10,11 +10,11 @@ class ParticleSystem(private var mBalls: Array<Particle>) {
     /*
      * Update the position of each particle in the system using the Verlet integrator.
      */
-    private fun updatePositions(sx: Float, sy: Float, timestamp: Long) {
+    private fun updatePositions(xSensor: Float, ySensor: Float, timestamp: Long) {
         if (mLastT != 0L) {
             val dT = (timestamp - mLastT).toFloat() / 1000f /* (1.0f / 1000000000.0f)*/
             for (ball in mBalls) {
-                ball.computePhysics(sx, sy, dT)
+                ball.computePhysics(xSensor, ySensor, dT)
             }
         }
         mLastT = timestamp
@@ -25,9 +25,9 @@ class ParticleSystem(private var mBalls: Array<Particle>) {
      * position of all the particles and resolving the constraints and
      * collisions.
      */
-    fun update(sx: Float, sy: Float, now: Long) {
+    fun update(xSensor: Float, ySensor: Float, now: Long) {
         // update the system's positions
-        updatePositions(sx, sy, now)
+        updatePositions(xSensor, ySensor, now)
 
         // We do no more than a limited number of iterations
         val maxIterations = 10

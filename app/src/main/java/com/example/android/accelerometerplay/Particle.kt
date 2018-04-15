@@ -41,19 +41,19 @@ class Particle(context: Context) : View(context) {
         }
 
 
-    private var mVelX: Float = 0f
-    private var mVelY: Float = 0f
+    var mVelX: Float = 0f
+    var mVelY: Float = 0f
 
-    fun computePhysics(sx: Float, sy: Float, dT: Float) {
+    fun computePhysics(xSensor: Float, ySensor: Float, deltaTime: Float) {
 
-        val ax = -sx / 5
-        val ay = -sy / 5
+        val ax = -xSensor / 5
+        val ay = -ySensor / 5
 
-        posX += mVelX * dT + ax * dT * dT / 2
-        posY += mVelY * dT + ay * dT * dT / 2
+        posX += mVelX * deltaTime + ax * deltaTime * deltaTime / 2
+        posY += mVelY * deltaTime + ay * deltaTime * deltaTime / 2
 
-        mVelX += ax * dT
-        mVelY += ay * dT
+        mVelX += ax * deltaTime
+        mVelY += ay * deltaTime
     }
 
 }
