@@ -26,16 +26,36 @@ class SimulationView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyle, defStyleRes), SensorEventListener {
 
     companion object {
-        val NUM_PARTICLES = 5
+        const val NUM_PARTICLES = 5
+        const val CALIBRATE_COUNT = 1000
         val ballDiameter = 0.006f
         var xBound: Float = 0.0f
         var yBound: Float = 0.0f
+        var linAccCount = 0
+        var xCalibrate = 0f
+        var yCalibrate = 0f
+        var zCalibrate = 0f
+        var lastTimeStamp = 0L
+    }
+
+    interface OnEventReceivedInterface {
+        fun onCalibrate(start: Boolean)
+        fun onXEvent(dTime: Long, xLinearAcc: Float, xVelocity: Float)
+        fun onYEvent(dTime: Long, xLinearAcc: Float, xVelocity: Float)
+        fun onZEvent(dTime: Long, xLinearAcc: Float, xVelocity: Float)
+    }
+
+    var listener: OnEventReceivedInterface? = null
+
+    fun setOnEventReceivedInterface(listener: OnEventReceivedInterface) {
+        this.listener = listener
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val mDisplay = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
 
     private val mAccelerometer: Sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val mLinearAcceleration: Sensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) // without gravity
 
     private var mMetersToPixelsX: Float by Delegates.notNull()
     private var mMetersToPixelsY: Float by Delegates.notNull()
@@ -45,7 +65,7 @@ class SimulationView @JvmOverloads constructor(
     private var mSensorX: Float = 0f
     private var mSensorY: Float = 0f
 
-    private lateinit var mParticleSystem: ParticleSystem
+    private var mParticleSystem: ParticleSystem
 
     private val mBalls = Array(NUM_PARTICLES, { Particle(context) })
 
@@ -54,7 +74,11 @@ class SimulationView @JvmOverloads constructor(
     * automatic low-pass filter, which "extracts" the gravity component
     * of the acceleration. As an added benefit, we use less power and CPU resources.
     */
-    fun startSimulation() = sensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME)
+//    fun startSimulation() = sensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME)
+    fun startSimulation() {
+        sensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME)
+        sensorManager.registerListener(this, mLinearAcceleration, SensorManager.SENSOR_DELAY_GAME)
+    }
 
 
     fun stopSimulation() = sensorManager.unregisterListener(this)
@@ -121,35 +145,65 @@ class SimulationView @JvmOverloads constructor(
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        when (event.sensor.type) {
+            Sensor.TYPE_LINEAR_ACCELERATION -> {
+                if (linAccCount == 0) { // ignore first
+                    // do nothing
+                    listener?.onCalibrate(true)
+                } else if (linAccCount < CALIBRATE_COUNT) { // in calibration
+                    xCalibrate += event.values[0]
+                    yCalibrate += event.values[1]
+                    zCalibrate += event.values[2]
+                } else if (linAccCount == CALIBRATE_COUNT) { // calc calibration
+                    xCalibrate /= (CALIBRATE_COUNT - 1)
+                    yCalibrate /= (CALIBRATE_COUNT - 1)
+                    zCalibrate /= (CALIBRATE_COUNT - 1)
+                    listener?.onCalibrate(false)
+                } else { // measure it !
+                    var dTime = event.timestamp - lastTimeStamp
+                    var xLinearAcc = event.values[0] - xCalibrate
+                    var xVelocity = 0.5f * xLinearAcc * dTime * dTime
+                    listener?.onXEvent(dTime, xLinearAcc, xVelocity)
+                    var yLinearAcc = event.values[1] - yCalibrate
+                    var yVelocity = 0.5f *  yLinearAcc * dTime * dTime
+                    listener?.onYEvent(dTime, yLinearAcc, yVelocity)
+                    var zLinearAcc = event.values[2] - zCalibrate
+                    var zVelocity = 0.5f *  zLinearAcc * dTime * dTime
+                    listener?.onZEvent(dTime, zLinearAcc, zVelocity)
+                }
+            }
+            Sensor.TYPE_ACCELEROMETER -> {
+                /*
+                 * record the accelerometer data, the event's timestamp as well as
+                 * the current time. The latter is needed so we can calculate the
+                 * "present" time during rendering. In this application, we need to
+                 * take into account how the screen is rotated with respect to the
+                 * sensors (which always return data in a coordinate space aligned
+                 * to with the screen in its native orientation).
+                 */
 
-        /*
-         * record the accelerometer data, the event's timestamp as well as
-         * the current time. The latter is needed so we can calculate the
-         * "present" time during rendering. In this application, we need to
-         * take into account how the screen is rotated with respect to the
-         * sensors (which always return data in a coordinate space aligned
-         * to with the screen in its native orientation).
-         */
-
-        when (mDisplay.rotation) {
-            Surface.ROTATION_0 -> {
-                mSensorX = event.values[0]
-                mSensorY = event.values[1]
-            }
-            Surface.ROTATION_90 -> {
-                mSensorX = -event.values[1]
-                mSensorY = event.values[0]
-            }
-            Surface.ROTATION_180 -> {
-                mSensorX = -event.values[0]
-                mSensorY = -event.values[1]
-            }
-            Surface.ROTATION_270 -> {
-                mSensorX = event.values[1]
-                mSensorY = -event.values[0]
+                when (mDisplay.rotation) {
+                    Surface.ROTATION_0 -> {
+                        mSensorX = event.values[0]
+                        mSensorY = event.values[1]
+                    }
+                    Surface.ROTATION_90 -> {
+                        mSensorX = -event.values[1]
+                        mSensorY = event.values[0]
+                    }
+                    Surface.ROTATION_180 -> {
+                        mSensorX = -event.values[0]
+                        mSensorY = -event.values[1]
+                    }
+                    Surface.ROTATION_270 -> {
+                        mSensorX = event.values[1]
+                        mSensorY = -event.values[0]
+                    }
+                }
             }
         }
+        lastTimeStamp = event.timestamp
+        linAccCount++
     }
 
     override fun onDraw(canvas: Canvas) {
